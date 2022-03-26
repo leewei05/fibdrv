@@ -12,7 +12,7 @@ int main()
 {
     FILE *fp = fopen("./plot", "w");
     char buf[1];
-    int offset = 500; /* TODO: try test something bigger than the limit */
+    int offset = 100; /* TODO: try test something bigger than the limit */
 
     int fd = open(FIB_DEV, O_RDWR);
     if (fd < 0) {
@@ -22,11 +22,16 @@ int main()
 
 
     for (int i = 0; i <= offset; i++) {
-        long long kt;
+        struct timespec start_ts, end_ts;
+        long long kernel_ts;
         lseek(fd, i, SEEK_SET);
-        kt = write(fd, buf, 1);
-        printf("%d %lld.\n", i, kt);
-        fprintf(fp, "%d %lld\n", i, kt);
+
+        clock_gettime(CLOCK_MONOTONIC, &start_ts);
+        kernel_ts = write(fd, buf, 1);
+        clock_gettime(CLOCK_MONOTONIC, &end_ts);
+        long long user_ts = (long long) (end_ts.tv_nsec - start_ts.tv_nsec);
+        printf("%d %lld %lld\n", i, kernel_ts, user_ts);
+        fprintf(fp, "%d %lld %lld\n", i, kernel_ts, user_ts);
     }
 
     close(fd);
