@@ -83,8 +83,11 @@ static ssize_t fib_write(struct file *file,
                          size_t size,
                          loff_t *offset)
 {
-    // return ktime_to_ns(process_time);
-    return 1;
+    start_time = ktime_get();
+    fib_sequence(*offset);
+    end_time = ktime_get();
+    process_time = ktime_sub(end_time, start_time);
+    return (ssize_t) ktime_to_ns(process_time);
 }
 
 static loff_t fib_device_lseek(struct file *file, loff_t offset, int orig)
