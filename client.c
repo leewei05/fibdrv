@@ -30,8 +30,10 @@ int main()
         kernel_ts = write(fd, buf, 1);
         clock_gettime(CLOCK_MONOTONIC, &end_ts);
         long long user_ts = (long long) (end_ts.tv_nsec - start_ts.tv_nsec);
-        printf("%d %lld %lld\n", i, kernel_ts, user_ts);
-        fprintf(fp, "%d %lld %lld\n", i, kernel_ts, user_ts);
+        printf("%d %lld %lld %lld\n", i, kernel_ts, user_ts,
+               user_ts - kernel_ts);
+        fprintf(fp, "%d %lld %lld %lld\n", i, kernel_ts, user_ts,
+                user_ts - kernel_ts);
     }
 
     close(fd);
