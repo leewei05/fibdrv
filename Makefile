@@ -37,7 +37,7 @@ pass = $(PRINTF) "$(PASS_COLOR)$1 Passed [-]$(NO_COLOR)\n"
 check: all
 	$(MAKE) unload
 	$(MAKE) load
-	sudo ./client > out
+	sudo taskset -c 11 ./client > out
 	sudo gnuplot ./scripts/plot.gp
 	eog f.png
 	$(MAKE) unload
