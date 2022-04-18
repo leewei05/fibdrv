@@ -38,6 +38,8 @@ check: all
 	$(MAKE) unload
 	$(MAKE) load
 	sudo ./client > out
+	sudo gnuplot ./scripts/plot.gp
+	eog f.png
 	$(MAKE) unload
 	@diff -u out scripts/expected.txt && $(call pass)
 	@scripts/verify.py
