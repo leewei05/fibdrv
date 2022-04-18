@@ -1,5 +1,6 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
+#include <linux/errno.h>
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/kdev_t.h>
@@ -7,6 +8,7 @@
 #include <linux/ktime.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/vmalloc.h>
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_AUTHOR("National Cheng Kung University, Taiwan");
@@ -24,7 +26,24 @@ static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
 static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
-static ktime_t start_time, end_time, process_time;
+
+static long long k_to_u(char *buf, long long val, unsigned long len)
+{
+    // How many pages do I need to allocate?
+    char *ker = vmalloc(16);
+    if (!ker) {
+        printk(KERN_ALERT "no memory allocated in kernel");
+        return -ENOMEM;
+    }
+
+    snprintf(ker, len, "%lu", (unsigned long) val);
+
+    if (copy_to_user(buf, ker, len) != 0)
+        return -EFAULT;
+
+    vfree(ker);
+    return 0;
+}
 
 static long long fib_sequence(long long k)
 {
@@ -37,6 +56,24 @@ static long long fib_sequence(long long k)
     for (int i = 2; i <= k; i++) {
         f[i] = f[i - 1] + f[i - 2];
     }
+
+    return f[k];
+}
+
+static ssize_t fib_basic(long long k, char *buf, size_t size)
+{
+    /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel. */
+    long long f[k + 2];
+
+    f[0] = 0;
+    f[1] = 1;
+
+    for (int i = 2; i <= k; i++) {
+        f[i] = f[i - 1] + f[i - 2];
+    }
+
+    if (k_to_u(buf, f[k], size) != 0)
+        printk("copy from kernel to user failed");
 
     return f[k];
 }
@@ -58,10 +95,10 @@ static int fib_release(struct inode *inode, struct file *file)
 
 static long long fib_time_proxy(long long k)
 {
-    start_time = ktime_get();
+    ktime_t start_time = ktime_get();
     long long result = fib_sequence(k);
-    end_time = ktime_get();
-    process_time = ktime_sub(end_time, start_time);
+    ktime_t end_time = ktime_get();
+    ktime_t process_time = ktime_sub(end_time, start_time);
     printk("fib(%llu)'s result is %llu, process time: %llu", k, result,
            ktime_to_ns(process_time));
 
@@ -83,10 +120,11 @@ static ssize_t fib_write(struct file *file,
                          size_t size,
                          loff_t *offset)
 {
-    start_time = ktime_get();
-    fib_sequence(*offset);
-    end_time = ktime_get();
-    process_time = ktime_sub(end_time, start_time);
+    ktime_t start_time = ktime_get();
+    fib_basic(*offset, buf, size);
+    ktime_t end_time = ktime_get();
+    ktime_t process_time = ktime_sub(end_time, start_time);
+
     return (ssize_t) ktime_to_ns(process_time);
 }
 
