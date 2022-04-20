@@ -72,6 +72,36 @@ static ssize_t fib_basic(long long k, char *buf, size_t size)
     return f[2];
 }
 
+static ssize_t fib_fd(long long n)
+{
+    if (n == 0)
+        return 0;
+
+    if (n <= 2)
+        return 1;
+
+    // odd: F(n) = F(2k+1) = F(k+1)^2 + F(k)^2
+    if (n & 0x01) {
+        unsigned int k = (n - 1) / 2;
+        return fib_fd(k + 1) * fib_fd(k + 1) + fib_fd(k) * fib_fd(k);
+    } else {
+        // even: F(n) = F(2k) = F(k) * [ 2 * F(k+1) – F(k) ]
+        unsigned int k = n / 2;
+        return fib_fd(k) * ((2 * fib_fd(k + 1)) - fib_fd(k));
+    }
+}
+
+static ssize_t fib_fast_doubling(long long k, char *buf, size_t size)
+{
+    ssize_t result = fib_fd(k);
+
+    if (k_to_u(buf, result, size) != 0)
+        printk("copy from kernel to user failed");
+
+    printk("%lld: %lld", k, (long long) result);
+    return result;
+}
+
 static int fib_open(struct inode *inode, struct file *file)
 {
     if (!mutex_trylock(&fib_mutex)) {
@@ -107,8 +137,10 @@ static ssize_t fib_write(struct file *file,
                          size_t size,
                          loff_t *offset)
 {
-    ktime_t start_time = ktime_get();
     fib_basic(*offset, buf, size);
+    ktime_t start_time = ktime_get();
+    fib_fast_doubling(*offset, buf, size);
+    // fib_basic(*offset, buf, size);
     ktime_t end_time = ktime_get();
     ktime_t process_time = ktime_sub(end_time, start_time);
 
