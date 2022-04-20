@@ -27,6 +27,13 @@ static struct cdev *fib_cdev;
 static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
 
+static void xor_swap(long long *x, long long *y)
+{
+    *x = *x ^ *y;
+    *y = *y ^ *x;
+    *x = *x ^ *y;
+}
+
 static long long k_to_u(char *buf, long long val, unsigned long len)
 {
     // How many pages do I need to allocate?
@@ -45,37 +52,24 @@ static long long k_to_u(char *buf, long long val, unsigned long len)
     return 0;
 }
 
-static long long fib_sequence(long long k)
-{
-    /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel. */
-    long long f[k + 2];
-
-    f[0] = 0;
-    f[1] = 1;
-
-    for (int i = 2; i <= k; i++) {
-        f[i] = f[i - 1] + f[i - 2];
-    }
-
-    return f[k];
-}
-
 static ssize_t fib_basic(long long k, char *buf, size_t size)
 {
-    /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel. */
-    long long f[k + 2];
+    long long f[3];
 
     f[0] = 0;
     f[1] = 1;
 
     for (int i = 2; i <= k; i++) {
-        f[i] = f[i - 1] + f[i - 2];
+        f[2] = f[0] + f[1];
+        xor_swap(&f[0], &f[1]);
+        f[1] = f[2];
     }
 
-    if (k_to_u(buf, f[k], size) != 0)
+    if (k_to_u(buf, f[2], size) != 0)
         printk("copy from kernel to user failed");
 
-    return f[k];
+    printk("%lld: %lld", k, f[2]);
+    return f[2];
 }
 
 static int fib_open(struct inode *inode, struct file *file)
@@ -95,14 +89,7 @@ static int fib_release(struct inode *inode, struct file *file)
 
 static long long fib_time_proxy(long long k)
 {
-    ktime_t start_time = ktime_get();
-    long long result = fib_sequence(k);
-    ktime_t end_time = ktime_get();
-    ktime_t process_time = ktime_sub(end_time, start_time);
-    printk("fib(%llu)'s result is %llu, process time: %llu", k, result,
-           ktime_to_ns(process_time));
-
-    return result;
+    return 0;
 }
 
 /* calculate the fibonacci number at given offset */
